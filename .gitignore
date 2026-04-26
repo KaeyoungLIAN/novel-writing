@@ -1,0 +1,5 @@
+user_inputs/
+chapters/
+outputs/
+__pycache__/
+*.pyc
