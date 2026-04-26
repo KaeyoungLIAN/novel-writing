@@ -159,32 +159,39 @@ class GrokClient:
 
     def chat_completion_json(self, messages: list) -> dict:
         """
-        调用 Grok API 并强制返回 JSON 对象。
+        调用 Grok API 并返回 JSON 对象。
         自动处理模型返回非 JSON 的情况（最多重试 2 次）。
+
+        注意：不使用 response_format 参数（部分本地模型不支持），
+        而是通过 prompt 指导模型输出 JSON。
         """
         last_error = None
         for parse_attempt in range(3):
             try:
-                text = self.chat_completion(
-                    messages,
-                    response_format={"type": "json_object"},
-                )
+                text = self.chat_completion(messages)
+                # 先尝试 parse 全部文本
                 return json.loads(text)
-            except json.JSONDecodeError as e:
-                last_error = e
-                self._log(f"  ⚠ JSON 解析失败，重新生成")
-                # 追加指令让模型修正输出
-                messages.append({
-                    "role": "assistant",
-                    "content": text,
-                })
-                messages.append({
-                    "role": "user",
-                    "content": (
-                        "你的输出不是合法的 JSON。请只输出纯 JSON 数组，"
-                        "不要加任何 markdown 代码块标记（```）或额外说明。"
-                    ),
-                })
+            except (json.JSONDecodeError, ValueError) as e:
+                # 如果失败，尝试在文本中提取 JSON
+                try:
+                    # 找第一个 { 和最后一个 }
+                    start = text.index("{")
+                    end = text.rindex("}") + 1
+                    return json.loads(text[start:end])
+                except (ValueError, json.JSONDecodeError):
+                    last_error = e
+                    self._log(f"  ⚠ JSON 解析失败，重新生成")
+                    messages.append({
+                        "role": "assistant",
+                        "content": text,
+                    })
+                    messages.append({
+                        "role": "user",
+                        "content": (
+                            "你的输出不是合法的 JSON。请只输出纯 JSON 对象，"
+                            "不要加任何 markdown 代码块标记或额外说明。"
+                        ),
+                    })
 
         raise GrokAPIError(
             f"JSON 解析失败，已重试 3 次: {last_error}"
