@@ -8,7 +8,7 @@
 # ============================================================
 # 这些是占位值，实际在 main.ipynb 中通过 config 模块覆盖
 API_BASE_URL = "https://api.x.ai/v1"
-API_MODEL = "grok-3-mini"  # 或 grok-3, grok-2-latest
+API_MODEL = "grok-4-1-fast"
 API_TEMPERATURE = 1.0
 API_MAX_TOKENS = 16384
 API_TIMEOUT = 300  # 秒
