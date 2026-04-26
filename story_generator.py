@@ -78,49 +78,49 @@ class NovelGenerator:
         print("📖 已加载用户设定")
 
     # ----------------------------------------------------------
-    # 第 2 步：生成 10 章大纲
+    # 第 2 步：从 chapters/ 目录加载章节大纲（用户自行编写）
     # ----------------------------------------------------------
 
-    def generate_chapter_outlines(self) -> list[dict]:
-        """生成 10 个章节的大纲"""
+    def load_chapters_from_dir(self, dir_path: str = "chapters") -> list[dict]:
+        """从目录读取所有章节大纲 .txt 文件"""
         print("\n" + "=" * 60)
-        print("📋 第 2 步：生成 10 章大纲")
+        print(f"📂 第 2 步：从 {dir_path} 加载章节大纲")
         print("=" * 60)
 
-        prompt = cfg.PROMPT_GENERATE_CHAPTER_OUTLINES.format(
-            characters=self.characters,
-            plot=self.plot,
-            style=self.style,
+        files = sorted(
+            f for f in os.listdir(dir_path) if f.endswith(".txt")
         )
+        if not files:
+            print(f"  ⚠ 目录 {dir_path} 中未找到 .txt 文件")
+            self.chapter_outlines = []
+            return self.chapter_outlines
 
-        messages = [
-            {"role": "system", "content": cfg.SYSTEM_PROMPT_WRITER},
-            {"role": "user", "content": prompt},
-        ]
+        outlines: list[dict] = []
+        for i, filename in enumerate(files, start=1):
+            filepath = os.path.join(dir_path, filename)
+            with open(filepath, "r", encoding="utf-8") as f:
+                lines = f.read().strip().split("\n")
 
-        result = self.client.chat_completion_json(messages)
+            title_line = lines[0].strip() if lines else ""
+            outline_text = "\n".join(lines[1:]).strip() if len(lines) > 1 else ""
 
-        # 兼容外层有 { "outlines": [...] } 和直接数组两种情况
-        if isinstance(result, dict) and "outlines" in result:
-            self.chapter_outlines = result["outlines"]
-        elif isinstance(result, list):
-            self.chapter_outlines = result
-        elif isinstance(result, dict):
-            # 尝试找第一个数组值
-            for v in result.values():
-                if isinstance(v, list):
-                    self.chapter_outlines = v
+            # 提取标题（去掉 '# 第X章 ' 前缀）
+            title = title_line
+            for prefix in ("# ", "## "):
+                if title_line.startswith(prefix):
+                    title = title_line[len(prefix):]
                     break
 
+            outlines.append({
+                "chapter": i,
+                "title": title,
+                "outline": outline_text,
+            })
+            print(f"  📄 [{i}/{len(files)}] {title_line}")
+
+        self.chapter_outlines = outlines
         self._save_json("chapter_outlines.json", self.chapter_outlines)
-
-        print(f"\n📋 已生成 {len(self.chapter_outlines)} 章大纲：")
-        for ch in self.chapter_outlines:
-            title = ch.get("title", ch.get("chapter", "?"))
-            outline_preview = ch.get("outline", "")[:80] + "..." if len(ch.get("outline", "")) > 80 else ch.get("outline", "")
-            print(f"  第 {ch.get('chapter', '?')} 章 · {title}")
-            print(f"    {outline_preview}")
-
+        print(f"\n✅ 已加载 {len(outlines)} 章大纲")
         return self.chapter_outlines
 
     # ----------------------------------------------------------
@@ -331,16 +331,3 @@ class NovelGenerator:
         print(f"   总段数：{len(self.novel_segments)} 段")
 
         return self.full_novel
-
-    # ----------------------------------------------------------
-    # 全流程一键执行
-    # ----------------------------------------------------------
-
-    def run_full_pipeline(self):
-        """从大纲到正文的全流程"""
-        self.generate_chapter_outlines()
-        self.generate_all_segments()
-        self.write_all_chapters()
-        print("\n" + "=" * 60)
-        print("🎉 小说全文生成完成！")
-        print("=" * 60)
