@@ -106,11 +106,24 @@ class GrokClient:
                 # 处理错误
                 error_body = response.text[:500]
                 if response.status_code == 429:
+                    last_error = GrokAPIError(
+                        f"Rate limited (429): {error_body}"
+                    )
                     self._log(f"  ⚠ 限流 (429)，等待后重试")
-                    last_error = GrokAPIError(f"Rate limited: {error_body}")
+                    # 优先使用 Retry-After 响应头
+                    retry_after = response.headers.get("Retry-After")
+                    if retry_after:
+                        try:
+                            time.sleep(int(retry_after))
+                        except ValueError:
+                            pass
+                    continue
                 elif response.status_code >= 500:
+                    last_error = GrokAPIError(
+                        f"Server error ({response.status_code}): {error_body}"
+                    )
                     self._log(f"  ⚠ 服务端错误 ({response.status_code})")
-                    last_error = GrokAPIError(f"Server error: {error_body}")
+                    continue
                 else:
                     # 4xx 错误（除 429 外）不重试
                     raise GrokAPIError(
@@ -120,12 +133,15 @@ class GrokClient:
             except httpx.TimeoutException as e:
                 last_error = GrokAPIError(f"请求超时: {e}")
                 self._log(f"  ⚠ 请求超时")
+                continue
             except httpx.RequestError as e:
                 last_error = GrokAPIError(f"网络错误: {e}")
                 self._log(f"  ⚠ 网络错误")
+                continue
 
         raise GrokAPIError(
-            f"API 调用失败，已重试 {self.max_retries} 次: {last_error}"
+            f"API 调用失败，已重试 {self.max_retries} 次"
+            + (f": {last_error}" if last_error else "")
         )
 
     def chat_completion_json(self, messages: list) -> dict:
