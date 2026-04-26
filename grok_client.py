@@ -144,6 +144,19 @@ class GrokClient:
             + (f": {last_error}" if last_error else "")
         )
 
+    def chat(self, user_message: str) -> str:
+        """Send a system message + user message, return text reply.
+
+        This is the simplest way to call Grok: one question, one answer.
+        Uses SYSTEM_PROMPT_WRITER as the system prompt for consistent tone.
+        """
+        from config import SYSTEM_PROMPT_WRITER
+        messages = [
+            {"role": "system", "content": SYSTEM_PROMPT_WRITER},
+            {"role": "user", "content": user_message},
+        ]
+        return self.chat_completion(messages)
+
     def chat_completion_json(self, messages: list) -> dict:
         """
         调用 Grok API 并强制返回 JSON 对象。
