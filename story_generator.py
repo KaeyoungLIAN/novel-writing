@@ -154,14 +154,17 @@ class NovelGenerator:
 
         result = self.client.chat_completion_json(messages)
 
+        # 优先找 "segments" 键，再找其他任何列表值
+        segments = []
         if isinstance(result, dict):
-            for v in result.values():
-                if isinstance(v, list):
-                    segments = v
-                    break
+            if "segments" in result and isinstance(result["segments"], list):
+                segments = result["segments"]
             else:
-                segments = []
-        else:
+                for v in result.values():
+                    if isinstance(v, list):
+                        segments = v
+                        break
+        elif isinstance(result, list):
             segments = result
 
         # 验证段数
